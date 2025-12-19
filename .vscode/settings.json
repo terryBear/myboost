@@ -1,0 +1,25 @@
+{
+	"[python]": {
+		"editor.defaultFormatter": "ms-python.black-formatter",
+		"editor.formatOnSave": true
+	},
+	"editor.codeActionsOnSave": {
+		"files.autoSave": "always",
+		"source.fixAll": "explicit",
+		"source.organizeImports": "explicit",
+		"source.fixAll.eslint": "explicit"
+	},
+	"editor.formatOnSave": true,
+	"editor.formatOnPaste": true,
+	"editor.formatOnSaveMode": "file",
+	"search.exclude": {
+		"**/.git": true,
+		"**/public": true,
+		"**/build": true,
+		"**/node_modules": true,
+		"**/yarn.lock": true,
+		"**/*.svg": true
+	},
+	"python-envs.defaultEnvManager": "ms-python.python:system",
+	"python-envs.pythonProjects": []
+}

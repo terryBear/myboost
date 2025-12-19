@@ -1,0 +1,38 @@
+runtime: python313
+service: default # Change to prod when deploying to production
+
+handlers:
+# Secure options for static files
+  - url: /static
+    static_dir: static
+    secure: always
+    http_headers:
+      Strict-Transport-Security: "max-age=2592000; includeSubdomains"
+      X-Content-Type-Options: "nosniff"
+      X-Frame-Options: "DENY"
+      X-XSS-Protection: "1; mode=block"
+
+  - url: /.*
+    script: auto
+    secure: always
+
+# User-defined environment variables
+env_variables:
+  DEBUG: False
+  SECRET_KEY: 'django-insecure-qi_hi_a&shp0@um43q!*z13%^%dmgb15$p79ro2c)msxn4!83b'
+  APPENGINE_URL: 'https://myboost.uc.r.appspot.com/'
+  DB_NAME: 'joasafaris'
+  DJANGO_DB_HOST: 'mongodb+srv://myboost-dev.2qgxpiv.mongodb.net/'
+  DJANGO_DB_URL: 'mongodb+srv://myboost-dev.2qgxpiv.mongodb.net/'
+  DJANGO_DB_PORT: 27017
+  DJANGO_PORT: 8080
+  PORT: 8080
+  DJANGO_DB_DATABASE: "myboost"
+  DJANGO_DB_USERNAME: "tertiuso_db_user"
+  DJANGO_DB_PASSWORD: "d9JpDzu0piUbDiZB"
+  DJANGO_FIREBASE_IMAGE_URL: "gs://myboost.firebasestorage.app"
+  GMAPS_API_KEY: "AIzaSyCsYcPdIKCxrDhRXOCY68sOVSkc5N8gs-o"
+  REDIS_PASSWORD: 'Ir5oMILsJJHd67GPx6RJumdILJuev4Ge'
+
+# Use this in place of adding a main.py with similar content
+entrypoint: gunicorn --timeout 1200 -b :8080 myboost.wsgi

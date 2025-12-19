@@ -1,0 +1,14 @@
+{% load django_vite %}
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Boost MSP Coffee Report</title>
+    {% vite_react_refresh %} 
+    {% vite_hmr_client %} 
+    {% vite_asset 'src/companies_report.tsx'%}
+  </head>
+  <body>
+    <div id="coffee-root"></div>
+    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+  </body>
+</html>

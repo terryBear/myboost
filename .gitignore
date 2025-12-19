@@ -1,0 +1,11 @@
+*.pyc
+*.pyc
+api/__pycache__/filters.cpython-313.pyc
+/static
+*.pyc
+
+.DS_Store
+
+assets/assets/
+
+assets/

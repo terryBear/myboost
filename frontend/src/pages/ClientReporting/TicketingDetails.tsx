@@ -1,39 +1,40 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
+    ChartContainer,
+    ChartTooltip,
+    ChartTooltipContent,
 } from "@/components/ui/chart";
+import { get } from "@/services/api";
 import {
-  AlertTriangle,
-  ArrowLeft,
-  Building2,
-  CheckCircle,
-  Clock,
-  Mail,
-  RefreshCw,
-  Ticket,
-  TrendingUp,
+    AlertTriangle,
+    ArrowLeft,
+    Building2,
+    CheckCircle,
+    Clock,
+    Mail,
+    RefreshCw,
+    Ticket,
+    TrendingUp,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
+    Bar,
+    BarChart,
+    Cell,
+    Pie,
+    PieChart,
+    ResponsiveContainer,
+    XAxis,
+    YAxis,
 } from "recharts";
 
 interface TicketData {
@@ -63,9 +64,54 @@ const TicketingDetails = () => {
   const [userRole, setUserRole] = useState<string>("");
   const [selectedCustomer, setSelectedCustomer] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [tickets, setTickets] = useState<TicketData[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock ticket data - all available tickets
-  const allTickets: TicketData[] = [
+  const customerName = searchParams.get("customerName") || "";
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole");
+    setUserRole(role || "");
+    setSelectedCustomer(customerName);
+    fetchTickets(customerName);
+  }, [customerName]);
+
+  const fetchTickets = async (name: string) => {
+    setLoading(true);
+    try {
+      const raw = await get<any[]>("reporting/tickets/", {
+        params: name ? { customerName: name } : {},
+      });
+      const list = Array.isArray(raw) ? raw : [];
+      const mapped: TicketData[] = list.map((t: any, i: number) => ({
+        id: t.id ?? `TK-${String(i + 1).padStart(3, "0")}`,
+        subject: t.subject ?? "—",
+        priority: (t.priority ?? "Low") as TicketData["priority"],
+        status: (t.status ?? "Open") as TicketData["status"],
+        customer: t.customer ?? name ?? "—",
+        branch: t.branch ?? "—",
+        user: t.user ?? t.email ?? "—",
+        created: t.created ?? t.created_at ?? "",
+        updated: t.updated ?? t.updated_at ?? "",
+        category: t.category ?? "—",
+        description: t.description ?? "",
+      }));
+      setTickets(mapped);
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+      setTickets([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchTickets(customerName).finally(() => setIsRefreshing(false));
+  };
+
+  // Legacy mock data kept for reference; UI uses tickets from API
+  const _allTicketsMock: TicketData[] = [
     {
       id: "TK-001",
       subject: "Email server connectivity issues",
@@ -159,16 +205,6 @@ const TicketingDetails = () => {
       description: "Assistance needed for email migration to new platform",
     },
   ];
-
-  // Filter tickets by selected customer
-  const tickets = selectedCustomer
-    ? allTickets.filter((t) => t.customer === selectedCustomer)
-    : allTickets;
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 2000);
-  };
 
   const handleEmailTicket = (ticketId: string) => {
     const ticket = tickets.find((t) => t.id === ticketId);
@@ -325,7 +361,7 @@ const TicketingDetails = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/boostcoffee/dashboard")}
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>

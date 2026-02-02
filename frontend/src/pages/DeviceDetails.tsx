@@ -1,21 +1,21 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Monitor, 
-  AlertTriangle, 
-  CheckCircle, 
+import { get } from "@/services/api";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle,
   Clock,
   Cpu,
   HardDrive,
-  Thermometer,
-  RefreshCw
+  Monitor,
+  RefreshCw,
+  Thermometer
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 interface Device {
   id: string;
@@ -72,58 +72,47 @@ const DeviceDetails = () => {
   const fetchDeviceData = async (customerName: string) => {
     try {
       setLoading(true);
-      
-      console.log(`[DeviceDetails] Fetching data for customer: "${customerName}"`);
-      
-      // Normalize customer key and resolve via v_customers_norm
-      const normalizeKey = (name: string) =>
-        String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
-      let clientKey = normalizeKey(customerName);
-      
-      const { data: custRow } = await supabase
-        .from('v_customers_norm')
-        .select('client_key,name')
-        .eq('name', customerName)
-        .maybeSingle();
-      
-      if (custRow?.client_key) {
-        clientKey = String(custRow.client_key).toLowerCase();
-        console.log(`[DeviceDetails] Resolved "${customerName}" -> clientKey: "${clientKey}"`);
-      } else {
-        console.log(`[DeviceDetails] No match in v_customers_norm, using normalized: "${clientKey}"`);
-      }
+      const params = customerName ? { customerName } : {};
+      const devicesData = await get<any[]>("reporting/devices/", { params });
+      const raw = Array.isArray(devicesData) ? devicesData : [];
 
-      // Fetch devices using normalized customer_key
-      const { data: devicesData, error } = await supabase
-        .from('devices_normalized')
-        .select('*')
-        .eq('customer_key', clientKey);
-
-      if (error) {
-        console.error('Error fetching devices:', error);
-        setDevices([]);
-        return;
-      }
-
-      // Map to Device interface
-      const mappedDevices: Device[] = (devicesData || []).map((device: any, index: number) => ({
-        id: device.id?.toString() || `device-${index}`,
-        name: device.name || 'Unknown Device',
-        type: device.type?.toLowerCase() === 'server' ? 'server' : 'workstation',
-        status: device.connection_status?.toLowerCase() === 'online' ? 'online' : 'offline',
-        os: 'Windows', // Not in normalized table, would need additional join
-        lastSeen: device.last_seen || new Date().toISOString(),
-        uptime: 95.0,
-        cpu: 0,
-        memory: 0,
-        disk: 0,
-        location: 'N/A',
-        alerts: []
-      }));
+      // Map Django/sync device shape to Device interface (N-able servers/workstations)
+      const mappedDevices: Device[] = raw.map((device: any, index: number) => {
+        const name =
+          device.computername ||
+          device.name ||
+          device.deviceName ||
+          device.hostname ||
+          `Device ${index + 1}`;
+        const type =
+          (device.type || device.device_type || "").toString().toLowerCase() === "server"
+            ? "server"
+            : "workstation";
+        const status =
+          (device.connection_status || device.status || "offline").toString().toLowerCase() ===
+          "online"
+            ? "online"
+            : "offline";
+        return {
+          id: device.id?.toString() ?? device.deviceid ?? `device-${index}`,
+          name,
+          type,
+          status,
+          os: device.os ?? "Windows",
+          lastSeen: device.last_seen ?? device.lastSeen ?? new Date().toISOString(),
+          uptime: Number(device.uptime) || 0,
+          cpu: Number(device.cpu) || 0,
+          memory: Number(device.memory) || 0,
+          disk: Number(device.disk) || 0,
+          location: device.location ?? "N/A",
+          user: device.user ?? device.username,
+          alerts: [],
+        };
+      });
 
       setDevices(mappedDevices);
     } catch (error) {
-      console.error('Error fetching device data:', error);
+      console.error("Error fetching device data:", error);
       setDevices([]);
     } finally {
       setLoading(false);
@@ -192,7 +181,7 @@ const DeviceDetails = () => {
       <header className="border-b bg-card px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => navigate("/dashboard")}>
+            <Button variant="outline" onClick={() => navigate("/coffee/dashboard")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex items-center gap-2">

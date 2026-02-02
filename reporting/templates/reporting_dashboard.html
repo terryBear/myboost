@@ -2,13 +2,16 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Boost MSP Coffee Report</title>
+    <title>MyBoost Compliance Report</title>
     {% vite_react_refresh %} 
     {% vite_hmr_client %} 
     {% vite_asset 'src/companies_report.tsx'%}
   </head>
   <body>
+    {% if share_token and share_customer_id %}
+    <script>window.__SHARE_TOKEN__ = "{{ share_token|escapejs }}"; window.__SHARE_CUSTOMER_ID__ = "{{ share_customer_id|escapejs }}";</script>
+    {% endif %}
     <div id="coffee-root"></div>
-    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}" />
   </body>
 </html>

@@ -1,39 +1,39 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
+    ChartContainer,
+    ChartTooltip,
+    ChartTooltipContent,
 } from "@/components/ui/chart";
 import {
-  AlertTriangle,
-  ArrowLeft,
-  Building2,
-  CheckCircle,
-  Clock,
-  Mail,
-  RefreshCw,
-  Ticket,
-  TrendingUp,
+    AlertTriangle,
+    ArrowLeft,
+    Building2,
+    CheckCircle,
+    Clock,
+    Mail,
+    RefreshCw,
+    Ticket,
+    TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
+    Bar,
+    BarChart,
+    Cell,
+    Pie,
+    PieChart,
+    ResponsiveContainer,
+    XAxis,
+    YAxis,
 } from "recharts";
 
 interface TicketData {
@@ -338,7 +338,7 @@ const TicketingDetails = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/coffee/dashboard")}
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>

@@ -9,8 +9,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { BOOST_LOGO_URL } from "@/lib/constants";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { saveTokens, type Tokens } from "../services/api";
 import { useAuthenticate } from "../services/authenticate.service";
 
 const Login = () => {
@@ -27,9 +29,8 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const response = await login(email, password);
-      console.log("Login response:", response);
-      console.log("Current pathname:", pathname);
+      const response: Tokens = await login(email, password);
+      saveTokens(response);
       navigate("/" + pathname.split("/")[1] + "/dashboard");
       toast({
         title: "Welcome back!",
@@ -37,6 +38,12 @@ const Login = () => {
       });
     } catch (error) {
       console.error("Login error:", error);
+      toast({
+        title: "Login failed",
+        description: error instanceof Error ? error.message : "Invalid credentials",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
     }
   };
@@ -45,31 +52,18 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex items-center justify-center mb-4">
-            <div className="bg-primary text-primary-foreground p-3 rounded-lg">
-              <svg
-                className="h-8 w-8"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-            </div>
+          <div className="flex justify-center mb-4">
+            <img
+              src={BOOST_LOGO_URL}
+              alt="MyBoost"
+              className="h-14 w-auto object-contain"
+            />
           </div>
           <CardTitle className="text-2xl font-bold">
-            Boost MSP Platform
+            MyBoost
           </CardTitle>
           <CardDescription>
-            Your unified IT management dashboard
+            Simplifying IT · Amplifying potential
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -81,7 +75,7 @@ const Login = () => {
                 type="text"
                 placeholder="Enter your email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                 required
               />
             </div>
@@ -92,7 +86,7 @@ const Login = () => {
                 type="password"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                 required
               />
             </div>

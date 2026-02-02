@@ -1,20 +1,21 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Wifi, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock,
-  Router,
-  Activity,
-  Signal,
-  RefreshCw
+import { get } from "@/services/api";
+import {
+    Activity,
+    AlertTriangle,
+    ArrowLeft,
+    CheckCircle,
+    Clock,
+    RefreshCw,
+    Router,
+    Signal,
+    Wifi
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 interface NetworkDevice {
   id: string;
@@ -49,87 +50,51 @@ const NetworkDetails = () => {
   const [userRole, setUserRole] = useState<string>("");
   const [selectedCustomer, setSelectedCustomer] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [devices, setDevices] = useState<NetworkDevice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const customerName = searchParams.get("customerName") || searchParams.get("customer") || "";
 
   useEffect(() => {
     const role = localStorage.getItem("userRole");
-    const customer = searchParams.get("customer") || "all";
     setUserRole(role || "");
-    setSelectedCustomer(customer);
-  }, [searchParams]);
+    setSelectedCustomer(customerName);
+    fetchNetworkData(customerName);
+  }, [customerName]);
+
+  const fetchNetworkData = async (name: string) => {
+    setLoading(true);
+    try {
+      const raw = await get<any[]>("reporting/sites/", {
+        params: name ? { customerName: name } : {},
+      });
+      const list = Array.isArray(raw) ? raw : [];
+      const mapped: NetworkDevice[] = list.map((s: any, i: number) => ({
+        id: s.id?.toString() || s.siteId || `site-${i}`,
+        name: s.name || s.siteName || s.displayName || "Site",
+        type: "gateway",
+        status: "online",
+        uptime: 99,
+        location: s.location || s.name || "N/A",
+        ip: s.ip || "—",
+        model: "—",
+        firmware: "—",
+        clients: 0,
+        bandwidth: { upload: 0, download: 0 },
+      }));
+      setDevices(mapped);
+    } catch (error) {
+      console.error("Error fetching network/sites data:", error);
+      setDevices([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 2000);
+    fetchNetworkData(customerName).finally(() => setIsRefreshing(false));
   };
-
-  // Mock data
-  const devices: NetworkDevice[] = [
-    {
-      id: "1",
-      name: "Main Gateway",
-      type: "gateway",
-      status: "online",
-      uptime: 99.8,
-      location: "Server Room",
-      ip: "192.168.1.1",
-      model: "UDM Pro",
-      firmware: "2.4.27",
-      clients: 45,
-      bandwidth: { upload: 85, download: 120 }
-    },
-    {
-      id: "2",
-      name: "Core Switch",
-      type: "switch",
-      status: "online",
-      uptime: 99.9,
-      location: "Server Room",
-      ip: "192.168.1.10",
-      model: "USW-Pro-48",
-      firmware: "6.2.26",
-      clients: 0,
-      bandwidth: { upload: 0, download: 0 }
-    },
-    {
-      id: "3",
-      name: "Office AP Main",
-      type: "access_point",
-      status: "warning",
-      uptime: 97.2,
-      location: "Main Office",
-      ip: "192.168.1.20",
-      model: "U6-Pro",
-      firmware: "6.2.25",
-      clients: 28,
-      bandwidth: { upload: 45, download: 67 }
-    },
-    {
-      id: "4",
-      name: "Conference Room AP",
-      type: "access_point",
-      status: "online",
-      uptime: 99.5,
-      location: "Conference Room A",
-      ip: "192.168.1.21",
-      model: "U6-Lite",
-      firmware: "6.2.26",
-      clients: 8,
-      bandwidth: { upload: 12, download: 18 }
-    },
-    {
-      id: "5",
-      name: "Entrance Camera",
-      type: "camera",
-      status: "offline",
-      uptime: 94.1,
-      location: "Main Entrance",
-      ip: "192.168.1.100",
-      model: "G4-Pro",
-      firmware: "4.69.55",
-      clients: 0,
-      bandwidth: { upload: 0, download: 0 }
-    }
-  ];
 
   const events: NetworkEvent[] = [
     {
@@ -223,7 +188,7 @@ const NetworkDetails = () => {
       <header className="border-b bg-card px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => navigate("/dashboard")}>
+            <Button variant="outline" onClick={() => navigate("/boostcoffee/dashboard")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex items-center gap-2">

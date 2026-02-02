@@ -20,8 +20,8 @@ handlers:
 env_variables:
   DEBUG: False
   SECRET_KEY: 'django-insecure-qi_hi_a&shp0@um43q!*z13%^%dmgb15$p79ro2c)msxn4!83b'
-  APPENGINE_URL: 'https://myboost.uc.r.appspot.com/'
-  DB_NAME: 'joasafaris'
+  APPENGINE_URL: 'https://myboost-481708.ey.r.appspot.com'
+  DB_NAME: 'myboost'
   DJANGO_DB_HOST: 'mongodb+srv://myboost-dev.2qgxpiv.mongodb.net/'
   DJANGO_DB_URL: 'mongodb+srv://myboost-dev.2qgxpiv.mongodb.net/'
   DJANGO_DB_PORT: 27017
@@ -33,6 +33,8 @@ env_variables:
   DJANGO_FIREBASE_IMAGE_URL: "gs://myboost.firebasestorage.app"
   GMAPS_API_KEY: "AIzaSyCsYcPdIKCxrDhRXOCY68sOVSkc5N8gs-o"
   REDIS_PASSWORD: 'Ir5oMILsJJHd67GPx6RJumdILJuev4Ge'
+  REDIS_URL: "redis-15814.c85.us-east-1-2.ec2.cloud.redislabs.com:15814"
+  REDIS_CONNETCION_STRING: "redis://default:irdtAKilpNk7ejgdJyFRQ5JcIBDrM8vu@redis-15814.c85.us-east-1-2.ec2.cloud.redislabs.com:15814"
 
 # Use this in place of adding a main.py with similar content
-entrypoint: gunicorn --timeout 1200 -b :8080 myboost.wsgi
+entrypoint: gunicorn --timeout 3000 -b :8080 myboost.wsgi

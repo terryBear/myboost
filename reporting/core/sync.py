@@ -1,10 +1,18 @@
 from django.core.cache import cache
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+from myboost.permissions import IsAdminUser
 
 import requests
 import xmltodict
+
+REPORTING_CACHE_KEY = "reporting_sync_data"
+REPORTING_CACHE_TIMEOUT = 300  # 5 minutes
+# Key for dashboard customers list; invalidate when sync runs so /customers/all gets fresh data.
+DASHBOARD_CUSTOMERS_CACHE_KEY = "dashboard_customers:all"
 
 
 def clean_response(data):
@@ -287,68 +295,90 @@ def get_nablermm_data():
                     if "siteid" in site:
                         # Get servers per site
                         serverresponse = get_servers_per_site(site["siteid"])
-                        if "results" in serverresponse:
-                            if "items" in serverresponse:
-                                if "servers" in serverresponse:
-                                    servers = serverresponse["result"]["items"][
-                                        "server"
-                                    ]
+                        if isinstance(serverresponse, dict):
+                            items = serverresponse.get("result", {}).get("items") or {}
+                            if isinstance(items, dict) and "server" in items:
+                                srv = items["server"]
+                                servers = (
+                                    srv
+                                    if isinstance(srv, list)
+                                    else [srv] if srv else []
+                                )
 
                         # Get workstations per site
                         workstationresponse = get_workstations_per_site(site["siteid"])
-                        if "results" in workstationresponse:
-                            if "items" in workstationresponse:
-                                if "workstations" in workstationresponse:
-                                    workstations = workstationresponse["result"][
-                                        "items"
-                                    ]["workstation"]
+                        if isinstance(workstationresponse, dict):
+                            items = (
+                                workstationresponse.get("result", {}).get("items") or {}
+                            )
+                            if isinstance(items, dict) and "workstation" in items:
+                                wk = items["workstation"]
+                                workstations = (
+                                    wk if isinstance(wk, list) else [wk] if wk else []
+                                )
 
                         # Get agentless assets per site
                         agentlessresponse = get_agentless_assets_per_site(
                             site["siteid"]
                         )
-                        if "results" in agentlessresponse:
-                            if "items" in agentlessresponse:
-                                if "agentless_assets" in agentlessresponse:
-                                    agentless_assets = agentlessresponse["result"][
-                                        "items"
-                                    ]["agentless_asset"]
+                        if isinstance(agentlessresponse, dict):
+                            items = (
+                                agentlessresponse.get("result", {}).get("items") or {}
+                            )
+                            if isinstance(items, dict) and "agentless_asset" in items:
+                                aa = items["agentless_asset"]
+                                agentless_assets = (
+                                    aa if isinstance(aa, list) else [aa] if aa else []
+                                )
 
                 elif isinstance(site, list):
                     for s in site:
                         if "siteid" in s:
-                            # Get servers per site
                             serverresponse = get_servers_per_site(s["siteid"])
-                            if "results" in serverresponse:
-                                if "items" in serverresponse:
-                                    if "servers" in serverresponse:
-                                        servers.extend(
-                                            serverresponse["result"]["items"]["server"]
-                                        )
+                            if isinstance(serverresponse, dict):
+                                items = (
+                                    serverresponse.get("result", {}).get("items") or {}
+                                )
+                                if isinstance(items, dict) and "server" in items:
+                                    srv = items["server"]
+                                    servers.extend(
+                                        srv
+                                        if isinstance(srv, list)
+                                        else [srv] if srv else []
+                                    )
 
-                            # Get workstations per site
                             workstationresponse = get_workstations_per_site(s["siteid"])
-                            if "results" in workstationresponse:
-                                if "items" in workstationresponse:
-                                    if "workstations" in workstationresponse:
-                                        workstations.extend(
-                                            workstationresponse["result"]["items"][
-                                                "workstation"
-                                            ]
-                                        )
+                            if isinstance(workstationresponse, dict):
+                                items = (
+                                    workstationresponse.get("result", {}).get("items")
+                                    or {}
+                                )
+                                if isinstance(items, dict) and "workstation" in items:
+                                    wk = items["workstation"]
+                                    workstations.extend(
+                                        wk
+                                        if isinstance(wk, list)
+                                        else [wk] if wk else []
+                                    )
 
-                            # Get agentless assets per site
                             agentlessresponse = get_agentless_assets_per_site(
                                 s["siteid"]
                             )
-                            if "results" in agentlessresponse:
-                                if "items" in agentlessresponse:
-                                    if "agentless_assets" in agentlessresponse:
-                                        agentless_assets.extend(
-                                            agentlessresponse["result"]["items"][
-                                                "agentless_asset"
-                                            ]
-                                        )
+                            if isinstance(agentlessresponse, dict):
+                                items = (
+                                    agentlessresponse.get("result", {}).get("items")
+                                    or {}
+                                )
+                                if (
+                                    isinstance(items, dict)
+                                    and "agentless_asset" in items
+                                ):
+                                    aa = items["agentless_asset"]
+                                    agentless_assets.extend(
+                                        aa
+                                        if isinstance(aa, list)
+                                        else [aa] if aa else []
+                                    )
 
                 site["servers"] = servers
                 site["workstations"] = workstations
@@ -357,6 +387,66 @@ def get_nablermm_data():
                 client["sites"] = site
                 client["devices"] = devices
                 client["failing_checks"] = checks
+
+            # Collect device IDs for per-device data (checks, outages, performance, etc.)
+            device_ids = set()
+            for client in clients:
+                if not isinstance(client, dict):
+                    continue
+                for site in (
+                    (client.get("sites") or [])
+                    if isinstance(client.get("sites"), list)
+                    else ([client.get("sites")] if client.get("sites") else [])
+                ):
+                    if not isinstance(site, dict):
+                        continue
+                    for key in ("servers", "workstations", "server", "workstation"):
+                        for dev in (
+                            (site.get(key) or [])
+                            if isinstance(site.get(key), list)
+                            else (
+                                [site.get(key)]
+                                if isinstance(site.get(key), dict) and site.get(key)
+                                else []
+                            )
+                        ):
+                            if isinstance(dev, dict) and dev.get("id"):
+                                device_ids.add(str(dev["id"]))
+                dev_root = client.get("devices") or {}
+                if isinstance(dev_root, dict):
+                    for key in ("server", "workstation", "mobile_device"):
+                        node = dev_root.get(key)
+                        if isinstance(node, dict):
+                            inner = (node.get("client") or {}).get("site") or {}
+                            arr = inner.get(
+                                "server" if key == "server" else "workstation"
+                            )
+                            for dev in (
+                                arr
+                                if isinstance(arr, list)
+                                else [arr] if isinstance(arr, dict) and arr else []
+                            ):
+                                if isinstance(dev, dict) and dev.get("id"):
+                                    device_ids.add(str(dev["id"]))
+
+            res["device_checks"] = {}
+            res["device_outages"] = {}
+            res["device_performance_history"] = {}
+            res["device_exchange_storage_history"] = {}
+            res["device_hardware"] = {}
+            res["device_software"] = {}
+            _max_devices = 30
+            for i, device_id in enumerate(list(device_ids)[:_max_devices]):
+                res["device_checks"][device_id] = list_check_by_device(device_id)
+                res["device_outages"][device_id] = list_outages_by_device(device_id)
+                res["device_performance_history"][device_id] = (
+                    list_performance_history_by_device(device_id)
+                )
+                res["device_exchange_storage_history"][device_id] = (
+                    list_exchange_storage_history_by_device(device_id)
+                )
+                res["device_hardware"][device_id] = list_hardware_by_asset(device_id)
+                res["device_software"][device_id] = list_software_by_asset(device_id)
 
             res["clients"] = clients
             res["antivirus_products"] = antivirus_products
@@ -404,13 +494,45 @@ def get_dashboard_data(provider_data: list) -> dict:
     return res
 
 
+def get_sync_data():
+    """Return combined SentinelOne + Nable RMM data; used by reporting views and sync endpoint."""
+    syncdata = {
+        "sentinelone": get_sentinel_one_data(),
+        "nablermm": get_nablermm_data(),
+    }
+    return syncdata
+
+
+def get_cached_sync_data():
+    """Return reporting data from cache, or latest SyncRun.payload, or fetch and cache it."""
+    data = cache.get(REPORTING_CACHE_KEY)
+    if data is None:
+        try:
+            from reporting.models import SyncRun
+
+            run = SyncRun.objects.order_by("-created_at").first()
+            if run and isinstance(run.payload, dict):
+                data = run.payload
+                cache.set(REPORTING_CACHE_KEY, data, REPORTING_CACHE_TIMEOUT)
+        except Exception:
+            pass
+        if data is None:
+            data = get_sync_data()
+            cache.set(REPORTING_CACHE_KEY, data, REPORTING_CACHE_TIMEOUT)
+    return data
+
+
 @api_view(["GET"])
+@permission_classes([IsAuthenticated, IsAdminUser])
 def sync_data(request):
+    """Fetch sync data from third-party APIs, persist to Sync* models, cache, and return."""
     try:
-        res = {
-            "sentinelone": get_sentinel_one_data(),
-            "nablermm": get_nablermm_data(),
-        }
+        res = get_sync_data()
+        from reporting.core.store_sync import run_sync_and_store
+
+        run_sync_and_store(sync_data=res)
+        cache.set(REPORTING_CACHE_KEY, res, REPORTING_CACHE_TIMEOUT)
+        cache.delete(DASHBOARD_CUSTOMERS_CACHE_KEY)
         return Response(res, status=status.HTTP_200_OK)
     except Exception as e:
         print(e)

@@ -1,10 +1,12 @@
 from django.urls import path, re_path
 from .views import get_reporting
+from shareable_report.views import share_view
 
 
 app_name = "reporting"
 
 urlpatterns = [
+    path("s/<str:token>/", share_view, name="share_view"),
     path("", get_reporting, name="reporting_dashboard"),
     re_path(
         r"^(?P<path>.*)$",

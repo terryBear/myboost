@@ -1,37 +1,29 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { 
-  ArrowLeft, 
-  HardDrive, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock,
-  Server,
-  Calendar,
-  RefreshCw,
-  TrendingUp,
-  AlertCircle,
-  XCircle,
-  Search,
-  Filter,
-  Download,
-  Plus,
-  Settings,
-  MoreHorizontal,
-  Monitor,
-  Database
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { get } from "@/services/api";
+import {
+    AlertTriangle,
+    CheckCircle,
+    Clock,
+    Database,
+    Download,
+    HardDrive,
+    Monitor,
+    MoreHorizontal,
+    Plus,
+    RefreshCw,
+    Search,
+    Server,
+    Settings,
+    XCircle
 } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line } from "recharts";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 
 interface BackupDevice {
   id: string;
@@ -68,35 +60,38 @@ const BackupDetails = () => {
   const fetchBackupData = async (customerName: string) => {
     try {
       setLoading(true);
-      let query = (supabase as any)
-        .from('backups_overview')
-        .select('*')
-        .order('partner_name');
+      const params =
+        customerName && customerName !== "All Customers"
+          ? { customerName }
+          : {};
+      const data = await get<any[]>("reporting/backups/", { params });
+      const raw = Array.isArray(data) ? data : [];
 
-      if (customerName && customerName !== 'All Customers') {
-        query = query.ilike('partner_name', customerName);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const transformedDevices: BackupDevice[] = (data as any[]).map((item: any) => ({
-        id: item.id.toString(),
-        deviceName: item.device_name || '',
-        computerName: item.computer_name || '',
-        customer: item.partner_name || '',
-        deviceType: item.device_type === 'Workstation' ? 'Workstation' : item.device_type || 'Workstation',
-        selectedSize: item.total_selected_size_gb || 0,
-        usedStorage: item.used_storage_gb || 0,
-        backupStatus: item.total_status || 'No backups',
-        errors: item.number_of_errors || 0,
-        lastBackup: formatLastBackup(item.last_successful_session),
-        progressBars: generateProgressBars(item.color_bar_last_28_days)
+      const transformedDevices: BackupDevice[] = raw.map((item: any) => ({
+        id: (item.id ?? item.deviceName ?? "").toString(),
+        deviceName: item.device_name ?? item.deviceName ?? "",
+        computerName: item.computer_name ?? item.computerName ?? "",
+        customer: item.partner_name ?? item.customer ?? "",
+        deviceType:
+          item.device_type === "Workstation"
+            ? "Workstation"
+            : (item.deviceType ?? item.device_type ?? "Workstation"),
+        selectedSize: Number(item.total_selected_size_gb ?? item.selectedSize ?? 0),
+        usedStorage: Number(item.used_storage_gb ?? item.usedStorage ?? 0),
+        backupStatus: item.total_status ?? item.backupStatus ?? "No backups",
+        errors: Number(item.number_of_errors ?? item.errors ?? 0),
+        lastBackup: formatLastBackup(
+          item.last_successful_session ?? item.lastBackup ?? null
+        ),
+        progressBars: generateProgressBars(
+          item.color_bar_last_28_days ?? null
+        ),
       }));
 
       setDevices(transformedDevices);
     } catch (error) {
-      console.error('Error fetching backup data:', error);
+      console.error("Error fetching backup data:", error);
+      setDevices([]);
     } finally {
       setLoading(false);
     }
@@ -170,20 +165,10 @@ const BackupDetails = () => {
   const handleSyncBackupAPI = async () => {
     setIsRefreshing(true);
     try {
-      const response = await fetch('https://xkfijttdhgkdzruygylq.supabase.co/functions/v1/sync-backup-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (response.ok) {
-        // Refresh data after sync
-        await fetchBackupData(selectedCustomer);
-        console.log('Backup API synced successfully');
-      } else {
-        console.error('Failed to sync backup API');
-      }
+      await get("reporting/sync/");
+      await fetchBackupData(selectedCustomer);
     } catch (error) {
-      console.error('Error syncing backup API:', error);
+      console.error("Error syncing backup API:", error);
     } finally {
       setIsRefreshing(false);
     }

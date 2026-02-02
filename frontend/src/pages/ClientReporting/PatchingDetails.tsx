@@ -1,49 +1,49 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
+    ChartContainer,
+    ChartTooltip,
+    ChartTooltipContent,
 } from "@/components/ui/chart";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { supabase } from "@/integrations/supabase/client";
+import { get, getRoleFromToken } from "@/services/api";
 import {
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle,
-  Download,
-  Monitor,
-  RefreshCw,
-  Server,
-  Shield,
-  X,
-  XCircle,
+    AlertTriangle,
+    ArrowLeft,
+    CheckCircle,
+    Download,
+    Monitor,
+    RefreshCw,
+    Server,
+    Shield,
+    X,
+    XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
+    Bar,
+    BarChart,
+    Cell,
+    Pie,
+    PieChart,
+    ResponsiveContainer,
+    XAxis,
+    YAxis,
 } from "recharts";
 
 interface PatchData {
@@ -93,87 +93,40 @@ const PatchingDetails = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
 
   useEffect(() => {
-    const role = localStorage.getItem("userRole");
+    const role = getRoleFromToken() ?? "";
     const nameFromQuery = searchParams.get("customerName") || "";
-    if (!role) {
-      navigate("/boostcoffee/login");
-      return;
-    }
     setUserRole(role);
     setSelectedCustomer(nameFromQuery);
     fetchPatchData(nameFromQuery);
-  }, [navigate, searchParams]);
+  }, [searchParams]);
 
   const fetchPatchData = async (customerName: string) => {
     try {
       setLoading(true);
-
-      console.log(
-        `[PatchingDetails] Fetching data for customer: "${customerName}"`
-      );
-
-      // Normalize customer key and resolve via v_customers_norm
-      const normalizeKey = (name: string) =>
-        String(name || "")
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, " ");
-      let clientKey = normalizeKey(customerName);
-
-      const { data: custRow } = await supabase
-        .from("v_customers_norm")
-        .select("client_key,name")
-        .eq("name", customerName)
-        .maybeSingle();
-
-      if (custRow?.client_key) {
-        clientKey = String(custRow.client_key).toLowerCase();
-        console.log(
-          `[PatchingDetails] Resolved "${customerName}" -> clientKey: "${clientKey}"`
-        );
-      } else {
-        console.log(
-          `[PatchingDetails] No match in v_customers_norm, using normalized: "${clientKey}"`
-        );
-      }
-
-      // Use Coffee Report data for consistency
-      const { data: coffeeReportData, error: coffeeError } = await supabase
-        .from("v_coffee_report_customer_summary")
-        .select("*")
-        .eq("customer", customerName)
-        .maybeSingle();
-
-      if (coffeeError) {
-        console.error("Error fetching coffee report data:", coffeeError);
-      }
-
-      // Fetch patch data using normalized client_key from rmm_patches table
-      const { data: patchDataFromDB, error: patchError } = await supabase
-        .from("patch_overview")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (patchError) {
-        console.error("Error fetching patch data:", patchError);
-      }
-
-      // Filter patches by normalized client name
-      const filteredPatches = (patchDataFromDB || []).filter((patch: any) => {
-        const patchClientKey = normalizeKey(patch.client || "");
-        return patchClientKey === clientKey;
-      }) as PatchData[];
-
-      setPatchData(filteredPatches);
-
-      // Store Coffee Report compliance for consistency
-      if (coffeeReportData) {
-        const compliance = coffeeReportData.patch_compliance_pct || 0;
-        setCoffeeReportCompliance(compliance);
-        localStorage.setItem("coffeeReportCompliance", compliance.toString());
-      }
+      const raw = await get<any[]>("reporting/checks/", {
+        params: customerName ? { customerName } : {},
+      });
+      const list = Array.isArray(raw) ? raw : [];
+      const mapped: PatchData[] = list.map((c: any, i: number) => ({
+        id: c.id ?? i + 1,
+        device: c.device ?? c.deviceName ?? c.hostname ?? "—",
+        client: customerName,
+        site: c.site ?? "—",
+        patch: c.name ?? c.checkName ?? c.title ?? "—",
+        status: (c.status ?? "Pending") as PatchData["status"],
+        discovered_install_date: c.discovered_install_date ?? c.created_at ?? "",
+        created_at: c.created_at ?? "",
+      }));
+      setPatchData(mapped);
+      const installed = list.filter((c: any) =>
+        ["installed", "Installed", "installing", "Reboot Required"].includes(String(c.status ?? ""))
+      ).length;
+      const total = list.length;
+      const pct = total > 0 ? Math.round((installed / total) * 100) : 0;
+      setCoffeeReportCompliance(pct);
     } catch (error) {
       console.error("Error fetching patch data:", error);
+      setPatchData([]);
     } finally {
       setLoading(false);
     }
@@ -240,21 +193,8 @@ const PatchingDetails = () => {
   const handleSyncPatchAPI = async () => {
     setIsRefreshing(true);
     try {
-      const response = await fetch(
-        "https://xkfijttdhgkdzruygylq.supabase.co/functions/v1/sync-patch-data",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-
-      if (response.ok) {
-        // Refresh data after sync
-        await fetchPatchData(selectedCustomer);
-        console.log("Patch API synced successfully");
-      } else {
-        console.error("Failed to sync patch API");
-      }
+      await get("reporting/sync/", {});
+      await fetchPatchData(selectedCustomer);
     } catch (error) {
       console.error("Error syncing patch API:", error);
     } finally {
@@ -522,7 +462,7 @@ const PatchingDetails = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/boostcoffee/dashboard")}
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>

@@ -1,5 +1,7 @@
 from django.contrib import admin
-from django.urls import path
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.core.exceptions import ObjectDoesNotExist
 from .models import (
     Customer,
     BackupDevice,
@@ -15,7 +17,34 @@ from .models import (
     TicketData,
     BranchTicketStats,
     Reporting,
+    UserCustomerProfile,
+    FaultReport,
 )
+
+User = get_user_model()
+
+
+class UserCustomerProfileInline(admin.StackedInline):
+    model = UserCustomerProfile
+    can_delete = True
+    verbose_name_plural = "Customer link (this user will only see this customer's data)"
+    fk_name = "user"
+
+
+class UserAdminWithCustomer(BaseUserAdmin):
+    """User admin with inline to link user to a customer (for Customer group users)."""
+
+    inlines = (UserCustomerProfileInline,)
+    list_display = BaseUserAdmin.list_display + ("_customer_id",)
+    list_filter = ("is_staff", "is_superuser", "is_active", "groups")
+
+    def _customer_id(self, obj):
+        try:
+            return obj.reporting_userprofile.customer_id
+        except ObjectDoesNotExist:
+            return "—"
+
+    _customer_id.short_description = "Customer ID"
 
 
 class CustomerAdmin(admin.ModelAdmin):
@@ -78,6 +107,18 @@ class ReportingAdmin(admin.ModelAdmin):
     ]
 
 
+# Re-register User with customer profile inline so admins can link users to customers
+admin.site.unregister(User)
+admin.site.register(User, UserAdminWithCustomer)
+
+
+class UserCustomerProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "customer_id")
+    list_filter = ("customer_id",)
+    search_fields = ("user__username", "customer_id")
+
+
+admin.site.register(UserCustomerProfile, UserCustomerProfileAdmin)
 admin.site.register(Reporting, ReportingAdmin)
 admin.site.register(Customer, CustomerAdmin)
 admin.site.register(BackupDevice, BackupDeviceAdmin)
@@ -92,3 +133,11 @@ admin.site.register(SentinelOneData, SentinelOneDataAdmin)
 admin.site.register(SecuritySummary, SecuritySummaryAdmin)
 admin.site.register(TicketData, TicketDataAdmin)
 admin.site.register(BranchTicketStats, BranchTicketStatsAdmin)
+
+
+@admin.register(FaultReport)
+class FaultReportAdmin(admin.ModelAdmin):
+    list_display = ("subject", "name", "email", "created_at")
+    list_filter = ("created_at",)
+    search_fields = ("name", "email", "subject", "message")
+    readonly_fields = ("created_at",)

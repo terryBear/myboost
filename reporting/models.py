@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 import uuid
 import random
@@ -80,6 +81,31 @@ class Customer(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class UserCustomerProfile(models.Model):
+    """
+    Links a Django User to a single customer (by N-able clientid / dashboard customer id).
+    When a user has this profile with customer_id set, they see only that customer's data
+    when using the Coffee or Boost Coffee dashboard APIs.
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="reporting_userprofile",
+    )
+    customer_id = models.CharField(
+        max_length=255,
+        help_text="Customer ID from sync (e.g. N-able clientid). This user will only see this customer's data.",
+    )
+
+    class Meta:
+        verbose_name = "User customer profile"
+        verbose_name_plural = "User customer profiles"
+
+    def __str__(self):
+        return f"{self.user.username} → {self.customer_id}"
 
 
 class BackupDevice(models.Model):
@@ -491,4 +517,322 @@ class Reporting(models.Model):
     )
 
     def __str__(self):
-        return self.name
+        return f"Reporting {self.ref_code}"
+
+
+# -------------------------------------------------------------------------
+# Sync storage: provider -> clients -> sites -> devices / failing_checks
+# Structure matches dummy (1).json; all data mapped back to a client.
+# -------------------------------------------------------------------------
+
+
+class SyncRun(models.Model):
+    """
+    Full raw payload from get_sync_data(); ensures all API response data is stored.
+    One record per sync; normalized Sync* models are derived from this.
+    """
+
+    payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"SyncRun {self.created_at.isoformat()}"
+
+
+class SyncProvider(models.Model):
+    """Provider key from sync payload (e.g. provider_acme, nablermm)."""
+
+    slug = models.SlugField(max_length=100, unique=True)
+    name = models.CharField(max_length=255, blank=True)
+    raw_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Provider-level data (e.g. antivirus_products from nablermm).",
+    )
+
+    class Meta:
+        ordering = ["slug"]
+
+    def __str__(self):
+        return self.slug
+
+
+class SyncClient(models.Model):
+    """Client under a provider; unique per (provider, clientid)."""
+
+    provider = models.ForeignKey(
+        SyncProvider, on_delete=models.CASCADE, related_name="sync_clients"
+    )
+    clientid = models.CharField(max_length=100)
+    name = models.CharField(max_length=255)
+    creation_date = models.CharField(max_length=50, blank=True)
+    device_count = models.PositiveIntegerField(null=True, blank=True)
+    server_count = models.PositiveIntegerField(null=True, blank=True)
+    workstation_count = models.PositiveIntegerField(null=True, blank=True)
+    mobile_device_count = models.PositiveIntegerField(null=True, blank=True)
+    timezone = models.CharField(max_length=100, blank=True)
+    view_dashboard = models.CharField(max_length=20, blank=True)
+    view_wkstsn_assets = models.CharField(max_length=20, blank=True)
+    dashboard_username = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["provider", "clientid"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "clientid"],
+                name="unique_sync_client_provider_clientid",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.provider.slug}/{self.clientid} {self.name}"
+
+
+class SyncSite(models.Model):
+    """Site under a client; unique per (client, siteid)."""
+
+    client = models.ForeignKey(
+        SyncClient, on_delete=models.CASCADE, related_name="sync_sites"
+    )
+    siteid = models.CharField(max_length=100)
+    name = models.CharField(max_length=255)
+    connection_ok = models.CharField(max_length=20, blank=True)
+    creation_date = models.CharField(max_length=50, blank=True)
+    raw_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["client", "siteid"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["client", "siteid"], name="unique_sync_site_client_siteid"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.client} / {self.name}"
+
+
+class SyncDevice(models.Model):
+    """Device (server/workstation) under a client/site; unique per (client, site, external_id)."""
+
+    DEVICE_TYPE_CHOICES = [("server", "server"), ("workstation", "workstation")]
+
+    client = models.ForeignKey(
+        SyncClient, on_delete=models.CASCADE, related_name="sync_devices"
+    )
+    site = models.ForeignKey(
+        SyncSite,
+        on_delete=models.CASCADE,
+        related_name="sync_devices",
+        null=True,
+        blank=True,
+    )
+    external_id = models.CharField(max_length=100)
+    name = models.CharField(max_length=255)
+    status = models.CharField(max_length=50, default="unknown")
+    username = models.CharField(max_length=255, blank=True)
+    description = models.CharField(max_length=255, blank=True)
+    device_type = models.CharField(max_length=20, choices=DEVICE_TYPE_CHOICES)
+    raw_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["client", "site", "external_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["client", "site", "external_id"],
+                name="unique_sync_device_client_site_id",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.external_id})"
+
+
+class SyncFailingCheck(models.Model):
+    """Failing check tied to a client (and optionally device); no duplicates by (client, device, start_date, start_time)."""
+
+    client = models.ForeignKey(
+        SyncClient, on_delete=models.CASCADE, related_name="sync_failing_checks"
+    )
+    device = models.ForeignKey(
+        SyncDevice,
+        on_delete=models.CASCADE,
+        related_name="sync_failing_checks",
+        null=True,
+        blank=True,
+    )
+    description = models.TextField(blank=True)
+    start_date = models.CharField(max_length=50, blank=True)
+    start_time = models.CharField(max_length=50, blank=True)
+    raw_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["client", "start_date", "start_time"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["client", "device", "start_date", "start_time"],
+                name="unique_sync_failing_check_client_device_datetime",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.client}: {self.description[:50]}"
+
+
+class SyncDeviceCheck(models.Model):
+    """Checks by device; payload from N-able list_checks."""
+
+    device = models.ForeignKey(
+        SyncDevice, on_delete=models.CASCADE, related_name="sync_device_checks"
+    )
+    payload = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["device"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device"],
+                name="unique_sync_device_check_per_device",
+            )
+        ]
+
+    def __str__(self):
+        return f"Checks for {self.device}"
+
+
+class SyncDeviceOutage(models.Model):
+    """Outages by device; payload from N-able list_outages."""
+
+    device = models.ForeignKey(
+        SyncDevice, on_delete=models.CASCADE, related_name="sync_device_outages"
+    )
+    payload = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["device"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device"],
+                name="unique_sync_device_outage_per_device",
+            )
+        ]
+
+    def __str__(self):
+        return f"Outages for {self.device}"
+
+
+class SyncDevicePerformanceHistory(models.Model):
+    """Performance history by device; payload from N-able list_performance_history."""
+
+    device = models.ForeignKey(
+        SyncDevice,
+        on_delete=models.CASCADE,
+        related_name="sync_device_performance_history",
+    )
+    payload = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["device"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device"],
+                name="unique_sync_device_perf_history_per_device",
+            )
+        ]
+
+    def __str__(self):
+        return f"Performance for {self.device}"
+
+
+class SyncDeviceExchangeStorage(models.Model):
+    """Exchange storage history by device; payload from N-able list_exchange_storage_history."""
+
+    device = models.ForeignKey(
+        SyncDevice,
+        on_delete=models.CASCADE,
+        related_name="sync_device_exchange_storage",
+    )
+    payload = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["device"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device"],
+                name="unique_sync_device_exchange_storage_per_device",
+            )
+        ]
+
+    def __str__(self):
+        return f"Exchange storage for {self.device}"
+
+
+class SyncDeviceHardware(models.Model):
+    """Hardware by asset (device); payload from N-able list_all_hardware."""
+
+    device = models.ForeignKey(
+        SyncDevice,
+        on_delete=models.CASCADE,
+        related_name="sync_device_hardware",
+    )
+    payload = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["device"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device"],
+                name="unique_sync_device_hardware_per_device",
+            )
+        ]
+
+    def __str__(self):
+        return f"Hardware for {self.device}"
+
+
+class SyncDeviceSoftware(models.Model):
+    """Software by asset (device); payload from N-able list_all_software."""
+
+    device = models.ForeignKey(
+        SyncDevice,
+        on_delete=models.CASCADE,
+        related_name="sync_device_software",
+    )
+    payload = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["device"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device"],
+                name="unique_sync_device_software_per_device",
+            )
+        ]
+
+    def __str__(self):
+        return f"Software for {self.device}"
+
+
+class FaultReport(models.Model):
+    """Contact/fault report from the app; stored and emailed to all staff users."""
+
+    name = models.CharField(max_length=255)
+    email = models.EmailField(max_length=254)
+    subject = models.CharField(max_length=255)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.subject} from {self.email}"

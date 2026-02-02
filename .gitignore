@@ -9,3 +9,5 @@ api/__pycache__/filters.cpython-313.pyc
 assets/assets/
 
 assets/
+
+.env

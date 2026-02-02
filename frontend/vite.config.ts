@@ -7,7 +7,8 @@ export default defineConfig({
   base: "/static/",
   build: {
     emptyOutDir: true,
-    manifest: true, // 👈 important
+    manifest: true, // 👈 important for django-vite
+    outDir: path.resolve(__dirname, "../static/frontend"),
     rollupOptions: {
       input: {
         companies_report: resolve(__dirname, "src/companies_report.tsx"),

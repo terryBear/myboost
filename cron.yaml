@@ -1,0 +1,5 @@
+cron:
+  - description: "daily sync job"
+    url: /api/reporting/sync/
+    schedule: every 5 minutes
+    timezone: Africa/Johannesburg

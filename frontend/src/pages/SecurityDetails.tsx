@@ -1,23 +1,22 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Shield, 
-  AlertTriangle, 
-  CheckCircle, 
-  Computer,
-  RefreshCw,
-  TrendingUp,
-  Eye,
-  ShieldAlert,
-  ShieldCheck,
-  AlertCircle,
-  XCircle
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { get } from "@/services/api";
+import {
+    AlertCircle,
+    AlertTriangle,
+    ArrowLeft,
+    CheckCircle,
+    Computer,
+    Eye,
+    RefreshCw,
+    Shield,
+    ShieldAlert,
+    ShieldCheck,
+    XCircle
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 interface AntivirusData {
   id: number;
@@ -67,137 +66,101 @@ const SecurityDetails = () => {
     const role = localStorage.getItem("userRole");
     setUserRole(role || "");
     fetchSecurityData();
-  }, []);
+  }, [customerName]);
 
   const fetchSecurityData = async () => {
     setLoading(true);
     try {
-      console.log(`Fetching security data for ${customerName}`);
-
-      // Normalize customer key and resolve via v_customers_norm when available
-      const normalizeKey = (name: string) =>
-        String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
-      let clientKey = normalizeKey(customerName);
-      const { data: custRow } = await supabase
-        .from('v_customers_norm')
-        .select('client_key,name')
-        .eq('name', customerName)
-        .maybeSingle();
-      if (custRow?.client_key) clientKey = String(custRow.client_key).toLowerCase();
-
-      // Fetch totals and security-related views + allowed sites in parallel
-      const [totalResp, serverResp, avResp, s1Resp, sitesResp] = await Promise.all([
-        supabase.from('devices_normalized').select('*', { count: 'exact', head: true }).eq('customer_key', clientKey),
-        supabase.from('devices_normalized').select('*', { count: 'exact', head: true }).eq('customer_key', clientKey).eq('type', 'server'),
-        supabase.from('v_nable_devices_norm').select('*').eq('customer_key', clientKey),
-        supabase.from('v_s1_agents_norm').select('*').eq('customer_key', clientKey),
-        supabase.from('v_sites_norm').select('site_key').eq('client_key', clientKey)
+      const params = customerName ? { customerName } : {};
+      const [devicesData, agentsData] = await Promise.all([
+        get<any[]>("reporting/devices/", { params }),
+        get<any[]>("reporting/agents/", { params }),
       ]);
 
-      const totalDevices = totalResp.count || 0;
-      const serverCount = serverResp.count || 0;
-      const endpointCount = Math.max(0, totalDevices - serverCount);
+      const devicesList = Array.isArray(devicesData) ? devicesData : [];
+      const agentsList = Array.isArray(agentsData) ? agentsData : [];
 
-      // Build allowed site filter
-      const allowedSites = new Set(
-        ((sitesResp.data || []) as any[]).map((r: any) => String(r.site_key || '').toLowerCase())
-      );
-
-      const rawAv = (avResp.data || []) as any[];
-      const rawS1 = (s1Resp.data || []) as any[];
-
-      // Apply site filter when available
-      const avWithin = allowedSites.size > 0
-        ? rawAv.filter((d: any) => allowedSites.has(String(d.site_key || '').toLowerCase()))
-        : rawAv;
-      const s1Within = allowedSites.size > 0
-        ? rawS1.filter((d: any) => allowedSites.has(String(d.site_key || '').toLowerCase()))
-        : rawS1;
-
-      // Merge AV and S1 datasets by host_key (fallback to hostname)
+      // Build device view: key by computername/name/hostname; merge N-able devices with S1 agents
       const byKey = new Map<string, any>();
-      const getKey = (d: any) => String(d.host_key || d.hostname || '').trim().toLowerCase();
-
-      for (const d of avWithin) {
+      const getKey = (d: any) =>
+        String(
+          d.computername ?? d.name ?? d.hostname ?? d.deviceName ?? d.endpointName ?? ""
+        )
+        .trim()
+        .toLowerCase();
+      for (const d of devicesList) {
         const k = getKey(d);
         if (!k) continue;
         byKey.set(k, {
-          hostname: d.hostname,
-          site_name: d.site_name,
-          site_key: d.site_key,
-          customer_key: d.customer_key,
-          av_installed: d.av_installed,
-          av_status: d.av_status,
-          av_product: d.av_product,
-          nable_last_seen: d.last_seen_utc,
+          hostname: d.computername ?? d.name ?? d.hostname ?? "Unknown",
+          site_name: d.siteName ?? d.site ?? "Unknown",
+          av_installed: true,
+          av_product: "N-able",
+          nable_last_seen: d.last_seen ?? d.lastSeen,
           s1_present: false,
         });
       }
-      for (const d of s1Within) {
-        const k = getKey(d);
+      for (const a of agentsList) {
+        const k = getKey(a);
         if (!k) continue;
-        const existing = byKey.get(k) || {
-          hostname: d.hostname,
-          site_name: d.site_name,
-          site_key: d.site_key,
-          customer_key: d.customer_key,
-          nable_last_seen: undefined,
-          av_installed: undefined,
-          av_status: undefined,
-          av_product: undefined,
-        };
-        existing.s1_present = Boolean(d.s1_present);
-        existing.agent_version = d.agent_version;
-        byKey.set(k, existing);
+        const existing = byKey.get(k);
+        if (existing) {
+          existing.s1_present = true;
+          existing.agent_version = a.agentVersion ?? a.version;
+        } else {
+          byKey.set(k, {
+            hostname: a.computerName ?? a.networkInterfaces?.[0]?.name ?? "Unknown",
+            site_name: a.siteName ?? a.site ?? "Unknown",
+            av_installed: false,
+            av_product: "",
+            nable_last_seen: undefined,
+            s1_present: true,
+            agent_version: a.agentVersion ?? a.version,
+          });
+        }
       }
 
       const deviceView = Array.from(byKey.values());
+      const avInstalledCount = deviceView.filter((d) => d.av_installed).length;
+      const s1Count = deviceView.filter((d) => d.s1_present).length;
 
-      console.log(`SecurityDetails merge: av=${rawAv.length} s1=${rawS1.length} allowedSites=${allowedSites.size} merged=${deviceView.length}`);
-      
-      const avInstalledCount = deviceView.filter(d => d.av_installed).length;
-      const s1Count = deviceView.filter(d => d.s1_present).length;
-
-      // Summary scoped to selected customer
       setSecuritySummary({
         totalDevices: deviceView.length,
         antivirusInstalled: avInstalledCount,
         sentinelOneInstalled: s1Count,
         protectedDevices: Math.max(avInstalledCount, s1Count),
         unprotectedDevices: Math.max(0, deviceView.length - Math.max(avInstalledCount, s1Count)),
-        activeThreats: 0
+        activeThreats: 0,
       });
 
-      // Antivirus products list
-      const antivirusFormatted = deviceView.map((device: any) => ({
-        id: Math.random(),
-        device_name: device.hostname || 'Unknown Device',
-        av_product_name: device.av_product || 'Unknown',
-        av_status: device.av_installed ? 'Enabled' : 'Disabled',
+      const antivirusFormatted = deviceView.map((device: any, i: number) => ({
+        id: i,
+        device_name: device.hostname ?? "Unknown Device",
+        av_product_name: device.av_product ?? "Unknown",
+        av_status: device.av_installed ? "Enabled" : "Disabled",
         threat_count: 0,
-        last_update: device.nable_last_seen || new Date().toISOString(),
-        last_scan: device.nable_last_seen || new Date().toISOString()
+        last_update: device.nable_last_seen ?? new Date().toISOString(),
+        last_scan: device.nable_last_seen ?? new Date().toISOString(),
       }));
 
       const s1Formatted = deviceView
-        .filter((device: any) => device.s1_present)
-        .map((device: any) => ({
-          id: Math.random(),
-          endpoints: device.hostname || 'Unknown Device',
-          site: device.site_name || 'Unknown Site',
-          status: 'Protected',
-          classification: 'Clean',
-          confidence_level: 'High',
-          threat_details: 'SentinelOne Agent Installed',
-          analyst_verdict: 'Clean',
-          incident_status: 'Resolved'
+        .filter((d: any) => d.s1_present)
+        .map((d: any, i: number) => ({
+          id: i,
+          endpoints: d.hostname ?? "Unknown Device",
+          site: d.site_name ?? "Unknown Site",
+          status: "Protected",
+          classification: "Clean",
+          confidence_level: "High",
+          threat_details: "SentinelOne Agent Installed",
+          analyst_verdict: "Clean",
+          incident_status: "Resolved",
         }));
 
       setAntivirusData(antivirusFormatted);
       setSentinelOneData(s1Formatted);
-
     } catch (error) {
-      console.error('Error fetching security data:', error);
+      console.error("Error fetching security data:", error);
     } finally {
       setLoading(false);
     }
@@ -212,18 +175,10 @@ const SecurityDetails = () => {
   const handleSyncSecurity = async () => {
     setIsRefreshing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-security-data', {
-        body: { customer: customerName },
-      });
-
-      if (error) {
-        console.error('Failed to sync security data:', error);
-      } else {
-        await fetchSecurityData();
-        console.log('Security data synced successfully', data);
-      }
+      await get("reporting/sync/");
+      await fetchSecurityData();
     } catch (error) {
-      console.error('Error syncing security data:', error);
+      console.error("Error syncing security data:", error);
     } finally {
       setIsRefreshing(false);
     }
@@ -298,7 +253,7 @@ const SecurityDetails = () => {
       <header className="border-b bg-card px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => navigate("/dashboard")}>
+            <Button variant="outline" onClick={() => navigate("/coffee/dashboard")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex items-center gap-2">

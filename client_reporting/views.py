@@ -1,14 +1,17 @@
-from django.views.generic import TemplateView
 from django.conf import settings
 from django.shortcuts import render
 from django.views.decorators.csrf import get_token
-from rest_framework.decorators import api_view
+from django.views.decorators.http import require_GET
+
+from reporting.auth_utils import require_jwt_for_spa
 
 
-@api_view(["GET"])
-def get_client_report(request, *args, **kwargs):
+@require_GET
+@require_jwt_for_spa("/boostcoffee/login")
+def get_client_report(request, path=None):
     """
-    Render the client reporting dashboard template.
+    Serve the Boost Coffee frontend SPA (client_report.tsx).
+    Requires valid JWT unless path is /boostcoffee/login; otherwise redirects to /boostcoffee/login.
     """
     return render(
         request,

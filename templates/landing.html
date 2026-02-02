@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="MyBoost — Simplifying IT · Amplifying potential. Managed IT, Cybersecurity and Connectivity." />
+  <title>MyBoost — Simplifying IT · Amplifying potential</title>
+  <style>
+    :root {
+      --white: #fff;
+      --color: #c2f270;
+      --black: #261c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--white);
+      color: var(--black);
+      line-height: 1.6;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; }
+    header {
+      background: var(--white);
+      border-bottom: 1px solid rgba(38, 28, 28, 0.1);
+      padding: 1rem 0;
+    }
+    .header-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .logo { height: 2.5rem; width: auto; }
+    .nav { display: flex; gap: 1.5rem; align-items: center; }
+    .nav a {
+      color: var(--black);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .nav a:hover { color: #1a6b2e; }
+    .btn {
+      display: inline-block;
+      background: var(--color);
+      color: var(--black);
+      padding: 0.6rem 1.25rem;
+      border-radius: 0.375rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+    }
+    .btn:hover { background: #b0e65f; }
+    .hero {
+      padding: 4rem 0;
+      text-align: center;
+    }
+    .hero h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 0 0 0.5rem; font-weight: 700; }
+    .hero .tagline { font-size: 1.25rem; color: #444; margin-bottom: 2rem; }
+    .hero .btn { font-size: 1rem; padding: 0.75rem 1.5rem; }
+    .services {
+      padding: 3rem 0;
+      background: rgba(194, 242, 112, 0.12);
+    }
+    .services h2 { text-align: center; margin-bottom: 2rem; font-size: 1.75rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+    .card {
+      background: var(--white);
+      border: 1px solid rgba(38, 28, 28, 0.1);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(38, 28, 28, 0.08);
+    }
+    .card h3 { margin: 0 0 0.5rem; font-size: 1.25rem; }
+    .card p { margin: 0; color: #444; font-size: 0.95rem; }
+    .cta {
+      padding: 4rem 0;
+      text-align: center;
+    }
+    .cta h2 { margin-bottom: 1rem; font-size: 1.5rem; }
+    .cta .btn { margin-top: 0.5rem; }
+    footer {
+      padding: 2rem 0;
+      border-top: 1px solid rgba(38, 28, 28, 0.1);
+      text-align: center;
+      color: #666;
+      font-size: 0.9rem;
+    }
+    footer a { color: var(--black); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container header-inner">
+      <img src="https://cdn.prod.website-files.com/65f294e7d6c297146c00599e/65f2a2780dc21c8d458bdf89_15170dab232d86e83870f2d8dde78925.webp" alt="MyBoost" class="logo" />
+      <nav class="nav">
+        <a href="/coffee/">Compliance Report</a>
+        <a href="/boostcoffee/">MSP Report</a>
+        <a href="/coffee/login" class="btn">Sign in</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h1>SIMPLIFYING it</h1>
+        <p class="tagline">amplifying potential!</p>
+        <p>Managed IT, Cybersecurity and Connectivity.</p>
+        <a href="/coffee/login" class="btn">Open Compliance Report</a>
+      </div>
+    </section>
+    <section class="services">
+      <div class="container">
+        <h2>What we do</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Boost SimplicITy</h3>
+            <p>SimpliCITY in Managed IT — devices running smoothly and securely so your team can focus on what they do best.</p>
+          </div>
+          <div class="card">
+            <h3>Boost Cyber SecurITy</h3>
+            <p>Uncompromised cyber security with a comprehensive, comprehensible approach to your digital security landscape.</p>
+          </div>
+          <div class="card">
+            <h3>Boost MobilITy</h3>
+            <p>MobilITy without limits — connectivity for remote locations and IoT with reliable mobile data solutions.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="cta">
+      <div class="container">
+        <h2>Ready to elevate your business?</h2>
+        <p>Sign in to your Compliance or MSP report.</p>
+        <a href="/coffee/login" class="btn">Compliance Report</a>
+        <a href="/boostcoffee/login" class="btn" style="margin-left: 0.5rem;">MSP Report</a>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <div class="container">
+      <p>MyBoost — Simplifying IT · Amplifying potential</p>
+      <p><a href="/coffee/">Compliance Report</a> · <a href="/boostcoffee/">MSP Report</a></p>
+    </div>
+  </footer>
+</body>
+</html>

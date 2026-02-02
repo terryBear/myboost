@@ -33,15 +33,34 @@ env.read_env(env_file)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool("DEBUG", default=False)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "myboost-481708.ey.r.appspot.com",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "https://myboost-481708.ey.r.appspot.com",
+]
+
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "https://myboost-481708.ey.r.appspot.com",
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    "django_daisy",
     "myboost.apps.MongoAdminConfig",
     "myboost.apps.MongoAuthConfig",
     "myboost.apps.MongoContentTypesConfig",
+    "django.contrib.humanize",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
@@ -52,6 +71,7 @@ INSTALLED_APPS = [
     "reporting",
     "provider",
     "client_reporting",
+    "shareable_report",
 ]
 
 MIDDLEWARE = [
@@ -106,6 +126,26 @@ DATABASES = {
 # Database routers
 # https://docs.djangoproject.com/en/dev/ref/settings/#database-routers
 DATABASE_ROUTERS = ["django_mongodb_backend.routers.MongoRouter"]
+
+# Cache (Redis or local memory)
+# https://docs.djangoproject.com/en/5.2/topics/cache/
+# Set REDIS_URL in .env (e.g. redis://127.0.0.1:6379/0) to use Redis; omit for local memory fallback.
+REDIS_CONNETCION_STRING = env.str("REDIS_CONNETCION_STRING", default="")
+if REDIS_CONNETCION_STRING:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_CONNETCION_STRING,
+            "OPTIONS": {},
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "unique-snowflake",
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -167,17 +207,29 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=365),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=365),
     "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
+    "BLACKLIST_AFTER_ROTATION": False,  # token_blacklist uses BigAutoField, incompatible with MongoDB
 }
 
-CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "https://myboost-481708.ey.r.appspot.com/",
+]
 
 DJANGO_VITE = {"default": {"dev_mode": DEBUG}}
 
 DJANGO_VITE_ASSETS_PATH = BASE_DIR / "static" / "frontend"
+
+# Django Daisy admin theme – https://github.com/hypy13/django-daisy
+DAISY_SETTINGS = {
+    "SITE_TITLE": "MyBoost",
+    "SITE_HEADER": "MyBoost Administration",
+    "INDEX_TITLE": "Simplifying IT · Amplifying potential",
+    "SHOW_THEME_SELECTOR": True,
+}

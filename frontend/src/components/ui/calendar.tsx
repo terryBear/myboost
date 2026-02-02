@@ -1,10 +1,13 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import * as React from "react";
+
 function Calendar({
   className,
   classNames,
   showOutsideDays = true,
-  ...props
-}: any) {
+}: React.ComponentProps<"div"> & {
+  classNames?: Record<string, string>;
+  showOutsideDays?: boolean;
+}) {
   return <p></p>;
 }
 Calendar.displayName = "Calendar";

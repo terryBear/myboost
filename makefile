@@ -27,7 +27,7 @@ docs:
 
 deploy:
 	@echo "Deploying project..."
-	cd frontend && npm run build
-	cd ../
+	# cd frontend && npm run build
+	# cd ../
 	poetry run python manage.py collectstatic --noinput
 	poetry run gcloud app deploy
